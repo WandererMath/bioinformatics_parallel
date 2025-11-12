@@ -9,14 +9,14 @@ import matplotlib.pyplot as plt
 
 from mylib.gtf import GTF
 
-gtf=GTF('../ref/true_genes_only.gtf')
+gtf=GTF('../reference/genomic.gtf')
 # protein_coding_genes=[g for g in gtf.all_genes() if gtf.is_protein(g)]
 
 DESEQ2_SCRIPT='/fs/ess/PAS2967/S21/deseq2.R'
-Ribo_PATH='feature_A'
-RNA_PATH='feature_B'
+Ribo_PATH='../Ribo-seq/intermediate/feature'
+RNA_PATH='../RNA-seq/intermediate/feature'
 
-DESEQ2_PATH='../RNA-seq/deseq2_protein_coding'
+
 
 
 def get_summary_files(folder_path):
@@ -92,14 +92,33 @@ def auto_grouping(features, control_group='A'):
 
 print(auto_grouping(features_RNA))
 
-def make_rdiff_input(i, tg, cg, output_path='.'):
+def make_rdiff_input(i, tg, cg, output_path='.', threshold=None):
+    # threshold =1/2 : keep only genes whose count is in first 1/2 in RNA seq in tg or cg
+    
     tg=tg[i]
 
     ORIGINAL_PATH=os.getcwd()
     os.makedirs(output_path, exist_ok=True)
     os.chdir(output_path)
+
+    if threshold is not None:
+        good_genes=[]
+        def filter_1_group(group):
+            counts=[f.counts for f in features_RNA if any(g in f.name for g in group)]
+            counts=np.array(counts).mean(axis=0)
+            return counts
+        tmp1=filter_1_group(tg)
+        tmp2=filter_1_group(cg)
+        k=int(len(tmp1)*threshold)
+        indices = list(set(np.argsort(tmp1)[-k:]) | set(np.argsort(tmp2)[-k:]))
+
     result=np.array([features[0].gene_ids] + [f.counts for f in features+features_RNA if any(g in f.name for g in tg+cg)]).T
+    
+    if threshold is not None:
+        result=result[indices]
+    
     df=pd.DataFrame(result)
+
     df.to_csv(f"matrix-{i}.tsv", sep='\t' , index=False, header=['Entry']+[f.name for f in features+features_RNA if any(g in f.name for g in tg+cg)])
 
     # Make meta
@@ -129,9 +148,9 @@ tg, cg=auto_grouping(features_RNA, control_group='A')
 # breakpoint()     
 if 1:
     for i in tg:
-        path='TE'
-        make_rdiff_input(i, tg, cg, path)
-        command=f'python $HOMEP/bin/RiboDiff/scripts/TE.py  -e TE/meta-{i}.csv -c TE/matrix-{i}.tsv -o TE/result-{i}.tsv -d 0 -r 1 -p 1'
+        path='../Ribo-seq/TE_ALL'
+        make_rdiff_input(i, tg, cg, path, threshold=None)
+        command=f'python $HOMEP/bin/RiboDiff/scripts/TE.py  -e {path}/meta-{i}.csv -c {path}/matrix-{i}.tsv -o {path}/result-{i}.tsv -d 0 -r 1 -p 1'
         print(command)
         r=subprocess.run([command], shell=True, check=True,  capture_output=True, text=True)
         

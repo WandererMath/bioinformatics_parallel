@@ -20,7 +20,7 @@ def unzip(path, output_path):
     return 0
 
 @ray.remote(num_cpus=12)
-def trim(path_r1, path_r2, output_path_r1, output_path_r2, *ready):
+def trim(path_r1, path_r2, output_path_r1, output_path_r2, *_):
     command=f'cutadapt -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT \
         -o {output_path_r1} \
         -p {output_path_r2} \
@@ -43,7 +43,7 @@ def trim(path_r1, path_r2, output_path_r1, output_path_r2, *ready):
 
 
 @ray.remote(num_cpus=12)
-def merge(path_r1, path_r2, output_name, *ready):
+def merge(path_r1, path_r2, output_name, *_):
     command=f'pear -f {path_r1} \
         -r {path_r2}\
         -o {output_name} \
@@ -62,13 +62,13 @@ def merge(path_r1, path_r2, output_name, *ready):
     return 0
 
 @ray.remote
-def move_merged(path_name, output_folder, *ready):
+def move_merged(path_name, output_folder, *_):
     command=f'mv {path_name}.assembled.fastq {output_folder}'
     subprocess.run([command], shell=True, check=True)
     return 0
 
 @ray.remote(num_cpus=12)
-def dedup(path_name, output_path, *ready):
+def dedup(path_name, output_path, *_):
     command = "fastp" + \
             " -i " + path_name + \
             " -o " + output_path + \
@@ -91,7 +91,7 @@ def dedup(path_name, output_path, *ready):
     return 0
 
 @ray.remote(num_cpus=12)
-def bowtie(path_name, output_path, *ready):
+def bowtie(path_name, output_path, *_):
     command = "bowtie" + \
             " -q" + \
             " -3 5 " + \
@@ -118,7 +118,7 @@ def bowtie(path_name, output_path, *ready):
 
 
 @ray.remote
-def filter_1_sam(path, output_path, low_threshold, high_threshold, *ready):
+def filter_1_sam(path, output_path, low_threshold, high_threshold, *_):
     # Open SAM input and output
     with pysam.AlignmentFile(path, "r") as infile, \
         pysam.AlignmentFile(output_path, "w", template=infile) as outfile:
@@ -128,7 +128,7 @@ def filter_1_sam(path, output_path, low_threshold, high_threshold, *ready):
                 outfile.write(read)         
 
 @ray.remote(num_cpus=12)
-def feature(path, output_path, *ready):
+def feature(path, output_path, *_):
     command=f'featureCounts  -s 1 -M -Q 20 -T 12 -t gene -g gene_id -a {GTF_PATH} -o {output_path} {path}'
     r=subprocess.run([command], shell=True, check=True,  capture_output=True, text=True)
     with open('out.log', 'a') as f: 

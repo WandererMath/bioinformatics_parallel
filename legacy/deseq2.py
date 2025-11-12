@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 from mylib.gtf import GTF
 
 gtf=GTF('../reference/genomic.gtf')
-protein_coding_genes=[g for g in gtf.all_genes() if gtf.is_protein(g)]
+protein_coding_genes=gtf.all_genes()
 
-DESEQ2_SCRIPT='/fs/ess/PAS2967/S21/deseq2.R'
-Ribo_PATH='Ribo-seq/feature'
-RNA_PATH='../RNA-seq/intermediate/feature'
+DESEQ2_SCRIPT='/fs/ess/PAS2967/dengyw144/S21/deseq2.R'
 
-DESEQ2_PATH='../RNA-seq/deseq2_protein_coding'
+RNA_PATH='../Ribo-seq/intermediate/feature'
+
+DESEQ2_PATH='../Ribo-seq/deseq2_protein_coding'
 
 
 def get_summary_files(folder_path):
@@ -60,16 +60,15 @@ class Feature:
 
 
 rnas= get_txt_files(RNA_PATH)
-ribos=get_txt_files(Ribo_PATH)
-features=[Feature(path, ribo_seq=True) for path in ribos]
+
 features_RNA=[Feature(path) for path in rnas]
 
 
-###### Create scatter plots
-# if 1:
-#     for f1, f2 in combinations(features_RNA,2):
-#         f1.scatter_plot(f2, '../RNA-seq/scatter')
-# quit()
+##### Create scatter plots
+if 1:
+    for f1, f2 in combinations(features_RNA,2):
+        f1.scatter_plot(f2, '../Ribo-seq/scatter')
+quit()
 
 ##### Prepare RiboDiff input
 # CONTROL_GROUPS=['W1', 'W2']
@@ -92,36 +91,12 @@ def auto_grouping(features, control_group='A'):
 
 print(auto_grouping(features_RNA))
 
-def make_rdiff_input(i, tg, cg):
-    result=np.array([features[0].gene_ids] + [f.counts for f in features+features_RNA if any(g in f.name for g in tg+cg)]).T
-    df=pd.DataFrame(result)
-    df.to_csv(f"matrix-{i}.tsv", sep='\t' , index=False, header=['Entry']+[f.name for f in features+features_RNA if any(g in f.name for g in tg+cg)])
-
-    # Make meta
-    meta=[]
-    for f in features+features_RNA:
-        if any(g in f.name for g in tg):
-            condition='DrugTreated'
-        elif any(g in f.name for g in cg):
-            condition='Control'
-        else:
-            continue
-        
-        if 'Ribo' in f.name:
-            data_type='Ribo-seq'
-        else:
-            data_type='RNA-seq'
-        
-        meta.append([f.name, data_type, condition])
-    
-    df=pd.DataFrame(meta)
-    df.to_csv(f"meta-{i}.csv", sep=',' , index=False, header=['Samples','Data_Type','Conditions'])
-
 
 # os.makedirs(DESEQ2_PATH, exist_ok=True)
 def make_deseq2_input(i, tg, cg, features):
     tg=tg[i]
     result=np.array([features[0].gene_ids] + [f.counts for f in features if any(g in f.name for g in tg+cg)]).T
+
     df=pd.DataFrame(result)
     df=df[df[0].isin(protein_coding_genes)]
     df.to_csv(os.path.join(DESEQ2_PATH, f"matrix-{i}.csv"), sep=',' , index=False, header=['GeneID']+[f.name for f in features if any(g in f.name for g in tg+cg)])
@@ -143,10 +118,6 @@ def make_deseq2_input(i, tg, cg, features):
     df.to_csv(os.path.join(DESEQ2_PATH,f"meta-{i}.csv"), sep=',' , index=False, header=['id','dex'])
 
 
-            
-# if 0:
-#     make_rdiff_input(1, TREATED_GROUPS_1)
-#     make_rdiff_input(2, TREATED_GROUPS_2)
 
 
 tg, cg=auto_grouping(features_RNA, control_group='A')
