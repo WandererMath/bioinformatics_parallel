@@ -9,7 +9,7 @@ from mylib.utils import get_paths_ends_with_something
 
 N_CPU=multiprocessing.cpu_count()
 
-BOWTIE_REF_PATH='reference/MyStrain'
+BOWTIE_REF_PATH='/users/PAS0291/dengyw144/Fredrick008/ref/Ecoli_BW25113'
 GTF_PATH='reference/genomic.gtf'
 MIN_INS=0
 MAX_INS=100
@@ -93,6 +93,7 @@ def dedup(path_name, output_path, *_):
 @ray.remote(num_cpus=12)
 def bowtie(path_name, output_path, *_):
     command = "bowtie" + \
+            " -m 1"+\
             " -q" + \
             " -3 5 " + \
             BOWTIE_REF_PATH + \
@@ -142,4 +143,118 @@ def feature(path, output_path, *_):
         fcntl.flock(f, fcntl.LOCK_UN)
     return 0
 
+def write_log(command, r):
+    with open('out.log', 'a') as f: 
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.write(command+'\n')
+        if r.stdout is not None:
+            f.write(r.stdout)
+        if r.stderr is not None:
+            f.write(r.stderr)
+        f.write('\n')
+        fcntl.flock(f, fcntl.LOCK_UN)
 
+@ray.remote
+def sam2bam(sam_path, bam_path, *_):
+    cmd=f'samtools view -S -b {sam_path} | samtools sort -o {bam_path}'
+    cmd2=f'samtools index {bam_path}'
+    r=subprocess.run([cmd], shell=True, check=True,  capture_output=True, text=True)
+    write_log(cmd, r)
+    r2=subprocess.run([cmd2], shell=True, check=True,  capture_output=True, text=True)
+    write_log(cmd2, r2)
+
+
+@ray.remote
+def sam2bedgraph(sam_path, out_dir, norm_out_dir, *_, ribo=True, offset=14):
+    sam_path=os.path.abspath(sam_path)
+    FIRST_LINE='track type=bedGraph\n'
+    BASENAME=os.path.basename(sam_path).split('.')[0]
+
+    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(norm_out_dir, exist_ok=True)
+    prefix='Ribo-' if ribo else 'RNA-'
+
+    OUTPUT_PLUS=os.path.join(out_dir, prefix+BASENAME + '-plus.bedgraph')
+    OUTPUT_MINUS=os.path.join(out_dir, prefix+BASENAME + '-minus.bedgraph')
+
+    OUTPUT_PLUS_NORM=os.path.join(norm_out_dir, prefix+BASENAME + '-plus.bedgraph')
+    OUTPUT_MINUS_NORM=os.path.join(norm_out_dir, prefix+BASENAME + '-minus.bedgraph')
+
+    result={'+':{}, '-':{}} # chrom: dict
+                #     # dict :=   start: value
+    with pysam.AlignmentFile(sam_path, "r") as samfile:
+        for read in samfile.fetch():
+            chrom, start, end = read.reference_name, read.reference_start, read.reference_end
+            
+            strand = '-' if read.is_reverse else '+'   
+            if read.is_unmapped:
+                continue
+            if chrom not in result[strand]:
+                result[strand][chrom] = {} 
+                
+            if ribo:
+                start+=1
+                if strand=='+':
+                    pos= end-offset
+                else:
+                    pos= start+offset 
+            else:
+                pos= (start + end)//2
+
+            if pos not in result[strand][chrom]:
+                result[strand][chrom][pos] = 1
+            else:
+                result[strand][chrom][pos] += 1
+
+    total=0
+    with open(OUTPUT_PLUS, 'w') as f:
+        f.write(FIRST_LINE)
+        for chrom in result['+']:
+            for pos in result['+'][chrom]:
+                total+=result['+'][chrom][pos]
+                f.write(f"{chrom}\t{pos}\t{pos+1}\t{result['+'][chrom][pos]}\n")
+
+    with open(OUTPUT_MINUS, 'w') as f:
+        f.write(FIRST_LINE)
+        for chrom in result['-']:
+            for pos in result['-'][chrom]:
+                total+=result['-'][chrom][pos]
+                f.write(f"{chrom}\t{pos}\t{pos+1}\t{result['-'][chrom][pos]}\n")
+    
+    # Normalize 
+    total/=(1E6)
+    with open(OUTPUT_PLUS_NORM, 'w') as f:
+        f.write(FIRST_LINE)
+        for chrom in result['+']:
+            for pos in result['+'][chrom]:
+                result['+'][chrom][pos]/=total
+                f.write(f"{chrom}\t{pos}\t{pos+1}\t{result['+'][chrom][pos]}\n")
+
+    with open(OUTPUT_MINUS_NORM, 'w') as f:
+        f.write(FIRST_LINE)
+        for chrom in result['-']:
+            for pos in result['-'][chrom]:
+                result['-'][chrom][pos]/=total
+                f.write(f"{chrom}\t{pos}\t{pos+1}\t{result['-'][chrom][pos]}\n")
+    # breakpoint()
+    # return result
+
+
+def merge_bedgraphs(input_samples_list, output_path):
+    result={}
+    for path in input_samples_list:
+        with open(path) as f:
+            next(f)
+            for line in f:
+                try:
+                    x, y, z, value= line.strip().split('\t')
+                    value=float(value)
+                    if (x, y, z) not in result:
+                        result[(x, y, z)]=0
+                    result[(x, y, z)]+=value
+                except:
+                    continue
+    with open(output_path, 'w') as f:
+        f.write('track type=bedGraph\n')
+        for key in result:
+            f.write(f"{key[0]}\t{key[1]}\t{key[2]}\t{result[key]}\n")

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=main
-#SBATCH --output=batch_job.log
+#SBATCH --output=batch_job_ribo.log
 #SBATCH --time=01:00:00
 #SBATCH --account=PAS2967  # Specify PI's account here
 #SBATCH --ntasks=1                   # Number of parallel tasks (processes)
@@ -12,4 +12,4 @@
 # Your job's commands go here
 source ~/.bashrc
 conda activate env1
-python rna.py
+python ribo.py

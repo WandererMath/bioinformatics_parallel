@@ -7,7 +7,7 @@ import pysam
 from mylib.utils import get_paths_ends_with_something
 from func import *
 
-BASE_DIR='RNA-seq'
+BASE_DIR='Ribo-seq'
 # BASE_DIR='test_data'
 
 if __name__=='__main__':
@@ -53,7 +53,7 @@ if __name__=='__main__':
             COV_DIR,
             NORM_COV_DIR,
             f7,
-            ribo=False,
+            ribo=True,
             offset=14
         )
         futures_result.append(f10)
