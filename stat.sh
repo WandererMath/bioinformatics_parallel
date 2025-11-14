@@ -1,0 +1,1 @@
+awk -F'\t' '$NF > 100' /fs/ess/PAS2967/dengyw144/hbeak2/RNA-seq/feature/A1.txt | wc -l

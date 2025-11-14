@@ -9,17 +9,16 @@ import matplotlib.pyplot as plt
 
 from mylib.gtf import GTF
 
-gtf=GTF('../reference/genomic.gtf')
+gtf=GTF('../ref/genomic.gtf')
 protein_coding_genes=gtf.all_genes()
 
 DESEQ2_SCRIPT='/fs/ess/PAS2967/dengyw144/S21/deseq2.R'
 
-PREFIX='Ribo'
-RNA_PATH=f'../{PREFIX}-seq/feature'
+RNA_PATH='../RNA-seq/feature_mixed'
 
-DESEQ2_PATH=f'../{PREFIX}-seq/deseq2_10p'
+DESEQ2_PATH='../RNA-seq/deseq2'
 
-GOOD_GENES=np.load('10p.pkl', allow_pickle=True)
+GOOD_GENES=np.load('tenth.pkl', allow_pickle=True)
 def get_summary_files(folder_path):
     txt_files = []
     for root, dirs, files in os.walk(folder_path):
@@ -100,7 +99,7 @@ def make_deseq2_input(i, tg, cg, features):
     result=np.array([features[0].gene_ids] + [f.counts for f in features if any(g in f.name for g in tg+cg)]).T
 
     df=pd.DataFrame(result)
-    df=df[df[0].isin(protein_coding_genes) & df[0].isin(GOOD_GENES)]
+    # df=df[df[0].isin(protein_coding_genes) & df[0].isin(GOOD_GENES)]
     df.to_csv(os.path.join(DESEQ2_PATH, f"matrix-{i}.csv"), sep=',' , index=False, header=['GeneID']+[f.name for f in features if any(g in f.name for g in tg+cg)])
 
     # Make meta

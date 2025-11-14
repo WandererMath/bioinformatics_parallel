@@ -9,7 +9,7 @@ from mylib.utils import get_paths_ends_with_something
 
 N_CPU=multiprocessing.cpu_count()
 
-BOWTIE_REF_PATH='/users/PAS0291/dengyw144/Fredrick008/ref/Ecoli_BW25113'
+BOWTIE_REF_PATH='reference/ecoli'
 GTF_PATH='reference/genomic.gtf'
 MIN_INS=0
 MAX_INS=100
@@ -240,7 +240,7 @@ def sam2bedgraph(sam_path, out_dir, norm_out_dir, *_, ribo=True, offset=14):
     # return result
 
 
-def merge_bedgraphs(input_samples_list, output_path):
+def merge_bedgraphs_custom(input_samples_list, output_path):
     result={}
     for path in input_samples_list:
         with open(path) as f:
@@ -258,3 +258,13 @@ def merge_bedgraphs(input_samples_list, output_path):
         f.write('track type=bedGraph\n')
         for key in result:
             f.write(f"{key[0]}\t{key[1]}\t{key[2]}\t{result[key]}\n")
+
+
+def merge_bedgraphs(input_samples_list, output_path):
+    cmd=f'bedtools unionbedg -i {' '.join(input_samples_list)} > {output_path}.tmp'
+    cmd_sum="awk '{print $1, $2, $3, $4+$5+$6}' OFS='\t' "+f"{output_path}.tmp > {output_path}"
+    r=subprocess.run([cmd], shell=True, check=True,  capture_output=True, text=True)
+    r2=subprocess.run([cmd_sum], shell=True, check=True,  capture_output=True, text=True)
+    write_log(cmd, r)
+    write_log(cmd_sum, r2)
+    
